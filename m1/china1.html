@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+  #map {
+  width: 800px;
+  height: 600px;
+  background: #ccc;
+}
+</style>
+<body>
+<script src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js">
+</script>
+<script src="d3/d3.v3.min.js"></script>
+
+<div id="map">
+</div>
+<script>
+d3.json("china.json", function(error, chinajson){  
+if (error) 
+        return console.error(error);
+    console.log(chinajson.features);
+	
+var height = 600;
+var width = 800;
+var texts, centered;
+var color = {
+  //lineColor: "#4AFFFE",
+  lineColor: "#4AFFFE",
+  pointColor: "#fbcd2c",
+  lightColor: "#4affff",
+  areaColor: ["#09373a", "#11545c", "#0b6c79", "#769398"],
+  //areaColor: ["#fff", "#fff", "#fff", "#fff"],
+  locationBgColor: "#0e403f",
+  //locationBgColor: "#fff",
+  pointTextColor: "#fff",
+  haveSelectColor: "#1c2b2b"
+  //haveSelectColor: "#ccc"
+};
+var scale = 1;
+var projection = d3.geo.mercator()
+  .center([100, 36])
+  .scale(600)
+  .translate([width / 2, height / 2]);
+var path = d3.geo.path()
+  .projection(projection);
+var svg = d3.select("#map").append('svg')
+  .attr('id', "mapSvg")
+  .attr('width', width)
+  .attr('height', height);
+ // .attr("fill", "#fff");
+
+svg.append("rect")
+  .attr("class", "background")
+  .attr("width", width)
+  .attr("height", height)
+  .on("click", clicked)
+  .attr("fill", "#fff");
+
+var mapG = svg.append('g')
+  .attr('id', "mapG");
+
+mapG.selectAll("path")
+  .data(chinajson.features)
+  .enter()
+  .append("path")
+  .attr("stroke", color.lineColor)
+  .attr("stroke-width", 1)
+//.attr("fill", "#000")
+  .attr("fill", "#fff")
+  .attr("id", function(d) {
+  return "path" + d.properties.id;
+})
+  .attr("style", "display:block")
+  .attr("class", function(d) {
+  if (d.properties.id.length > 2) {
+    return "location"
+  } else {
+    return "distribution"
+  }
+})
+  .attr("style", "cursor:pointer;")
+  .attr("d", path)
+  .on("mouseover", function(d) {
+  d3.select(this).attr("stroke-width", 5 / self.scale + "px");
+  d3.select(this).attr("stroke", color.pointColor);
+})
+  .on("mouseout", function(d) {
+
+  if (d3.select(this).attr("active") == "false" || d.properties.id.length <= 2 || !d3.select(this).attr("active")) {
+    d3.select(this)
+      .attr("stroke", color.lineColor)
+      .attr("stroke-width", 1 / scale + "px");
+  }
+})
+  .on("click", function(d) {
+  if (d.properties.id.length <= 2) {
+    clicked(d)
+  };
+  if (d.properties.id.length > 2) {
+    d3.select(".point-info").attr("style", "display:block;");
+    mapG.selectAll("path")
+      .attr("stroke", color.lineColor)
+      .attr("stroke-width", 1 / scale + "px")
+      .attr("active", "false");
+
+    d3.select(this)
+      .attr("stroke", self.color.pointColor)
+      .attr("stroke-width", 5 / scale + "px")
+      .attr("active", "true");
+  }
+});
+
+texts = mapG.append("g")
+  .attr("class", "texts")
+  .selectAll("text")
+  .data(chinajson.features)
+  .enter().append("text")
+  .attr("class", function(d) {
+  if (d.properties.id.length > 2) {
+    return "location"
+  } else {
+    return "distribution"
+  }
+})
+  .text(function(d) {
+  return d.properties.name;
+})
+  .attr("id", function(d) {
+  return "text" + d.properties.id;
+})
+  .attr("transform", function(d) {
+  var centroid = path.centroid(d),
+  x = centroid[0],
+  y = centroid[1];
+  return "translate(" + x + ", " + y + ")";
+})
+  .attr('fill', '#1E9AAD')
+  .attr('font-size', '14px')
+  .attr("style", "cursor:pointer;");
+
+d3.selectAll(".location").attr("style", "display:none");
+
+function clicked(d) {
+  var x, y, k;
+  if (d && centered !== d) {
+    var centroid = path.centroid(d);
+    x = centroid[0];
+    y = centroid[1];
+    if (d.properties.id == "46") {
+      y = y + 10;
+    }
+    if (d.properties.scale) {
+      k = d.properties.scale;
+    } else {
+      k = scale
+    }
+    scale = k;
+    centered = d;
+    $(".re-show").css("display", "block");
+    mapChange("open", d);
+  } else {
+    x = width / 2;
+    y = height / 2;
+    k = 1;
+    scale = 1;
+    centered = null;
+    $(".re-show").css("display", "none");
+    mapChange("close");
+  }
+
+  mapG.selectAll("path")
+    .classed("active", centered && function(d) {
+    return d === centered;
+  });
+
+  mapG.transition()
+    .duration(750)
+    .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")")
+    .style("stroke-width", 1.5 / k + "px");
+}
+
+function mapChange(flag, d) {
+  if (flag == "open") {
+    var disId = d.properties.id;
+
+    if (disId.length < 3) {
+      chinajson.features.forEach(function(n) {
+        if (n.properties.id.length > 2 && n.properties.id.substr(0, 2) === disId) {
+          d3.select("#path" + n.properties.id)
+            .attr("style", "display:block")
+            .attr("stroke-width", 1 / scale + "px")
+            .attr("fill", "#1b5c5b");
+          d3.select("#text" + n.properties.id)
+            .attr("style", "display:block")
+            .attr("font-size", 0.8 + "px");
+        } else {
+          if (n.properties.id.length <= 2 && n.properties.id != disId) {
+            d3.select(".point-info").attr("style", "display:none;");
+            d3.select("#path" + n.properties.id)
+              .attr("style", "opacity:0.2")
+              .attr("stroke-width", "0.3px");
+            d3.select("#text" + n.properties.id)
+              .attr("style", "display:none")
+              .attr("font-size", "3px");
+          } else {
+            d3.select("#path" + n.properties.id)
+              .attr("style", "display:none")
+              .attr("stroke-width", "0.2px");
+            d3.select("#text" + n.properties.id)
+              .attr("style", "display:none")
+              .attr("font-size", "1px");
+          }
+        }
+      })
+
+    }
+  } else {
+
+    d3.selectAll(".location").attr("style", "display:none");
+    d3.selectAll("text").attr("font-size", "14px");
+    d3.selectAll("path").attr("stroke-width", "1px");
+    d3.selectAll(".distribution").attr("style", "display:block");
+  }
+}
+});
+</script>
+</body>

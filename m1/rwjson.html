@@ -1,0 +1,54 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>MODEL PAGE</title>
+<script type="text/javascript" src="jquery.min.js"></script>
+<script type="text/javascript">
+    var Ajax = function ()
+    {
+	    
+        $.getJSON ("china.json", function (d1)
+        {
+            //console.log(d1.features[0].properties);
+           $.getJSON ("newout_1.json", function (d2){
+		           //console.log(d2);
+				   d1.features.forEach(function addarray(p1){
+				     p1.properties.magDate=[];
+				   });
+				   d2.location.forEach(function search(v2){
+					   d1.features.forEach(function addProperty(v1){
+						//console.log(v1.properties.cp[]);
+							if(v1.properties.cp!=undefined&&Math.round(v1.properties.cp[0])===Math.round(v2.log)&&Math.round(v1.properties.cp[1])===Math.round(v2.lat)){
+							//if(v1.properties.cp!=undefined&&v1.properties.cp[0].parseInt===v2.log.Math.round){	
+							    m={};
+								//console.log("there");
+							    m.date=v2.date.replace(/(\d{4})(\d{2})(\d{2})/g,'$1.$2.$3');
+								m.mag=v2.mag;
+								m.log=v2.log;
+								//console.log("12123");
+								m.lat=v2.lat;
+								m.deep=v2.deep;
+								v1.properties.magDate.push(m);
+							 }
+							 /*if(v2.name.indexOf(v1.properties.name)!=-1){
+								v2.properties.msg=v1.msg;
+							  }*/
+							 // v1.properties.msg=1;
+						});
+				 });
+				 //console.log(JSON.stringify(d1.features[0].properties));
+				// console.log(JSON.stringify(d1));
+				$('#disp').html(JSON.stringify(d1));
+		    });
+		
+			//console.log(JSON.stringify(d1.features[0].properties));
+        });
+	}
+</script>
+</head>
+<body>
+    <input type="button" value="json读写" onclick="Ajax();" />
+    <div id="disp"></div>
+</body>
+</html>

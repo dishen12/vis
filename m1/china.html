@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+#map {
+width: 1200px;
+height: 1000px;
+background: #fff;
+}
+
+.location circle{
+  fill: red;
+}
+#tooltip {
+  position: absolute;
+  text-align: center;
+  padding: 20px;
+  margin: 10px;
+  font: 12px sans-serif;
+  background: lightsteelblue;
+  border: 1px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+#tooltip h4{
+  margin:0;
+  font-size:14px;
+}
+#tooltip{
+  background:rgba(0,0,0,0.9);
+  border:1px solid grey;
+  border-radius:5px;
+  font-size:12px;
+  width:auto;
+  padding:4px;
+  color:white;
+  opacity:0;
+}
+#tooltip table{
+  table-layout:fixed;
+}
+#tooltip tr td{
+  padding:0;
+  margin:0;
+}
+#tooltip tr td:nth-child(1){
+  width:50px;
+}
+#tooltip tr td:nth-child(2){
+  text-align:center;
+}
+
+body {
+  font: 10px sans-serif;
+}
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.bar {
+  fill: orange;
+}
+
+.bar:hover {
+  fill: orangered ;
+}
+
+.x.axis path {
+  display: none;
+}
+
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+}
+
+/* Creates a small triangle extender for the tooltip */
+.d3-tip:after {
+  box-sizing: border-box;
+  display: inline;
+  font-size: 10px;
+  width: 100%;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.8);
+  content: "\25BC";
+  position: absolute;
+  text-align: center;
+}
+
+/* Style northward tooltips differently */
+.d3-tip.n:after {
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+}
+.hex{
+ padding:2cm 0cm 0cm 1cm;
+}
+.h_text{
+  padding:5cm 5cm 5cm 5cm;
+}
+</style>
+<body>
+<script src="jquery.min.js"></script>
+<script src="d3/d3.v3.min.js"></script>
+<script src="d3.tip.js"></script>
+<div id="tooltip"></div><!-- div to hold tooltip. -->
+<div id="map"></div>
+<script>
+//柱状图svg
+    var svgchart = d3.select("body").append("svg")
+	                 .attr("class", "hex")
+					 .attr("id", "bar")
+					 .text("sjdhajkdaks");
+			 
+
+
+	function tooltipHtml(d){	/* function to create html content string in tooltip div. */
+	   // mag=d.properties.mag==undefined?"no earthquake":d.properties.mag;
+	   mag_str="<tr><td align='center'>年份</td><td align='center'>地震等级</td><td align='center'>&nbsp&nbsp震源深度&nbsp&nbsp&nbsp</td><td align='center'>震源经纬度</td></tr>";
+	   if(d.properties.magDate.length==0) {
+	     //mag_str="<tr><td>"+mag_year+"</td><td>no earthquake</td></tr>";
+		 mag_str="<tr><td colspan='4'>no earthquake<td></tr>";
+		 }
+	   else
+	      d.properties.magDate.forEach(function get(item){
+		    mag_str+="<tr><td>"+item.date+"</td><td>"+item.mag+"</td><td>"+item.deep+"</td><td>["+item.log+","+item.lat+"]</td></tr>";
+
+		  });
+		return "<h4>"+"信息"+"</h4><table>"+
+		    "<tr><td>地名</td><td>"+(d.properties.name)+"</td></tr>"+
+			"<tr><td>经度</td><td>"+(d.properties.cp[0])+"</td></tr>"+
+			"<tr><td>纬度</td><td>"+(d.properties.cp[1])+"</td></tr>"+
+			//"<tr><td>地震危害等级</td><td>"+mag+"</td></tr>"+
+			"<tr><td colspan='2'>地震危害等级</td></tr>"+mag_str+
+			"</table>";
+	}
+	function mouseOver(d){
+	d3.select("#tooltip").transition().duration(200).style("opacity", .9);
+
+	d3.select("#tooltip").html(tooltipHtml(d))
+		.style("left", (d3.event.pageX) + "px")
+		.style("top", (d3.event.pageY - 28) + "px");
+	}
+
+	function mouseOut(){
+		d3.select("#tooltip").transition().duration(500).style("opacity", 0);
+	}
+
+
+</script>
+
+<script>
+d3.json("china1.json", function(error, chinajson)
+{
+	if (error)
+        return console.error(error);
+    //console.log(chinajson.features);
+	var height = 800;
+	var width = 1200;
+	var texts, centered;
+	var color =
+	{
+		lineColor: "#4AFFFE",
+		pointColor: "#fff665",
+		lightColor: "#4affff",
+		areaColor: ["#09373a", "#11545c", "#0b6c79", "#769398"],
+		locationBgColor: "#0e403f",
+		pointTextColor: "#fff",
+		haveSelectColor: "#1c2b2b"
+	};
+	var colorB = d3.scale.category20();
+	var scale = 1;
+	var projection = d3.geo.mercator()
+	  .center([100, 36])
+	  .scale(900)
+	  .translate([width / 2, height / 2]);
+	var path = d3.geo.path()
+	  .projection(projection);
+	var svg = d3.select("#map").append('svg')
+	  .attr('id', "mapSvg")
+	  .attr('width', width)
+	  .attr('height', height)
+	  .attr('fill',"#fff");
+
+	svg.append("rect")
+	  .attr("class", "background")
+	  .attr("width", width)
+	  .attr("height", height)
+	  .on("click", clicked);
+
+	var mapG = svg.append('g')
+	  .attr('id', "mapG");
+
+	mapG.selectAll("path")
+	  .data(chinajson.features)
+	  .enter()
+	  .append("path")
+	  .attr("stroke", color.lineColor)
+	  .attr("stroke-width", 1)
+	  .attr("fill", function(d)
+	   { k=0;
+		var disId = d.properties.id;
+		if (disId.length < 3) {
+		  chinajson.features.forEach(function(n) {
+			if (n.properties.id.length > 2 && n.properties.id.substr(0, 2) === disId) {
+			    k=k+n.properties.magDate.length;
+			}
+		   });
+		};
+		/*--------------------------------------------------调色----------------------------------------------------*/
+		if(k<1.0)
+		   col='#ede9f6';
+		else if(k>=1&&k<8)
+		   col='#8465c1';
+		else if(k>=8&&k<16)
+		   col='#3f0d9e';
+		else if(k>=16&&k<28)
+		   col='#2e0a73';
+		else if(k>=28)
+		   col='#230857';
+		else
+		   col='#dcd3ed';
+		return col;
+		//return '#3f0d9e';
+	  })
+	  .attr("id", function(d)
+	  {
+	  return "path" + d.properties.id;
+		})
+	  .attr("style", "display:block")
+	  .attr("class", function(d)
+	  {
+	  if (d.properties.id.length > 2)
+		{
+		return "location"
+		}
+		else
+	  {
+		return "distribution"
+	  }
+	})
+	  .attr("style", "cursor:pointer;")
+	  .attr("d", path)
+	  .on("mouseover", function(d)
+	  {
+	  d3.select(this).attr("stroke-width", 5 / self.scale + "px");
+	  d3.select(this).attr("stroke", color.pointColor);
+	})
+	  .on("mouseout", function(d) {
+
+	  if (d3.select(this).attr("active") == "false" || d.properties.id.length <= 2 || !d3.select(this).attr("active"))
+	  {
+		d3.select(this)
+		  .attr("stroke", color.lineColor)
+		  .attr("stroke-width", 1 / scale + "px");
+	  }
+	})
+	  .on("click", function(d)
+	  {
+	  if (d.properties.id.length <= 2) {
+		clicked(d)
+	  };
+	  if (d.properties.id.length > 2) {
+		d3.select(".point-info").attr("style", "display:block;");
+		mapG.selectAll("path")
+		  .attr("stroke", color.lineColor)
+		  .attr("stroke-width", 1 / scale + "px")
+		  .attr("active", "false");
+
+		d3.select(this)
+		  .attr("stroke", self.color.pointColor)
+		  .attr("stroke-width", 5 / scale + "px")
+		  .attr("active", "true");
+	  }
+	});
+
+
+	function dot(){
+	   // alert('调用');
+    	d3.json("out.json",function(error,placedata)
+            {
+                //插入分组元素
+                var location = svg.selectAll("location")
+                        .data(placedata.location)
+                        .enter()
+                        .append("g")
+                        //.attr("class","location")
+                        .attr("transform",function(d){
+                            //计算标注点的位置
+                            var coor = projection([d.log, d.lat]); //经纬度的投影
+                            return "translate("+ coor[0] + "," + coor[1] +")";
+
+                        });
+
+                    //画圆作为标注
+                    location.append("circle")
+                            .attr("r",function(d){
+								//return d.mag}) //半径
+								return 2})
+                            .style("fill","red");
+
+
+            });
+	}
+
+	dot();
+
+
+
+
+	//啦啦啦啦啦啦啦啦
+
+
+	//修改了
+
+
+
+	texts = mapG.append("g")
+	  .attr("class", "texts")
+	  .selectAll("text")
+	  .data(chinajson.features)
+	  .enter().append("text")
+	  .attr("class", function(d) {
+	  if (d.properties.id.length > 2) {
+		return "location"
+	  } else {
+		return "distribution"
+	  }
+	})
+	  .text(function(d) {
+	  return d.properties.name;
+	})
+	  .attr("id", function(d) {
+	  return "text" + d.properties.id;
+	})
+	  .attr("transform", function(d) {
+	  var centroid = path.centroid(d),
+	  x = centroid[0],
+	  y = centroid[1];
+	  return "translate(" + x + ", " + y + ")";
+	})
+	  .attr('fill', '#1E9AAD')
+	  .attr('font-size', '14px')
+	  .attr("style", "cursor:pointer;");
+
+	d3.selectAll(".location").attr("style", "display:none");
+
+	function clicked(d)
+	{
+	  var x, y, k;
+	  if (d && centered !== d) {
+		var centroid = path.centroid(d);
+		x = centroid[0];
+		y = centroid[1];
+		if (d.properties.id == "46") {
+		  y = y + 10;
+		}
+		if (d.properties.scale) {
+		  k = d.properties.scale;
+		} else {
+		  k = scale
+		}
+		scale = k;
+		centered = d;
+		$(".re-show").css("display", "block");
+		mapChange("open", d);
+		var circle = svg.selectAll("circle");
+		circle.remove();
+	  } else {
+		x = width / 2;
+		y = height / 2;
+		k = 1;
+		scale = 1;
+		centered = null;
+		$(".re-show").css("display", "none");
+		mapChange("close");
+		dot();
+	  }
+
+	  mapG.selectAll("path")
+		.classed("active", centered && function(d) {
+		return d === centered;
+	  });
+
+	  mapG.transition()
+		.duration(750)
+		.attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")")
+		.style("stroke-width", 1.5 / k + "px");
+	}
+
+	function mapChange(flag, d) {
+	  if (flag == "open") {
+		var disId = d.properties.id;
+
+		if (disId.length < 3) {
+		  chinajson.features.forEach(function(n) {
+			if (n.properties.id.length > 2 && n.properties.id.substr(0, 2) === disId) {
+			  d3.select("#path" + n.properties.id)
+				.attr("style", "display:block")
+				.attr("stroke-width", 1 / scale + "px")
+				.on("mouseover", mouseOver)
+				.on("mouseout", mouseOut)
+				.on("click",function(d){
+				  if(d.properties.magDate.length!=0){
+				     //new window("").document.write("string"); 
+				     //window.open("china1.html","","width=200,height=200")
+					  svgchart.html("");
+					  location.href = "#bar"; 
+					 /* svgchart.append("text")
+					  .attr("class", "h_text")
+			          .style("fill","black")
+					  .text("这里是总结性语句金卡戴珊空间哈市科技加快速度机会大尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快尽快将");*/
+				      chart(d.properties.magDate);
+					}
+				})
+				.attr("fill",function(d){
+/*--------------------------------------------------调色----------------------------------------------------*/
+                     if(d.properties.magDate.length!=0){
+					    temp=[];
+					    d.properties.magDate.forEach(function get(item){
+						 temp.push(item.mag);
+						});
+                        m=Math.max.apply(null,temp);
+						//console.log(m);
+						}
+                     else
+                        m=0;
+
+				    if(m<=3.0)
+					   co='#efd4fd';
+					else if(m>=3.0&&m<4.5)
+                   	   co='#6ee6d4';
+					else if(m>=4.5&&m<6.0)
+					   co='#40c8a7';
+					else if(m>=6.0&&m<7.0)
+					   co='#a91c0a';
+					else if(m>=7.0)
+					   co='#ff0000';
+					else
+                       co='#6c0d9f';
+					return co;
+				});
+			  d3.select("#text" + n.properties.id)
+				.attr("style", "display:block")
+				.attr("font-size", 0.8 + "px");
+			} else {
+
+			  if (n.properties.id.length <= 2 && n.properties.id != disId) {
+				d3.select(".point-info").attr("style", "display:none;");
+				d3.select("#path" + n.properties.id)
+				  .attr("style", "opacity:0.2")
+				  .attr("stroke-width", "0.3px");
+				d3.select("#text" + n.properties.id)
+				  .attr("style", "display:none")
+				  .attr("font-size", "3px");
+			  } else {
+				d3.select("#path" + n.properties.id)
+				  .attr("style", "display:none")
+				  .attr("stroke-width", "0.2px");
+				d3.select("#text" + n.properties.id)
+				  .attr("style", "display:none")
+				  .attr("font-size", "1px");
+			  }
+			}
+		  })
+
+		}
+	  } else {
+
+		d3.selectAll(".location").attr("style", "display:none");
+		d3.selectAll("text").attr("font-size", "14px");
+		d3.selectAll("path").attr("stroke-width", "1px");
+		d3.selectAll(".distribution").attr("style", "display:block");
+	  }
+	}
+	});
+</script>
+
+
+
+<!-- chart_detals -->
+<script>
+//柱状图
+function chart(data){
+//var margin = {top: 40, right: 10, bottom: 30, left: 10}
+  var margin = {top: 10, right: 10, bottom: 10, left: 10},
+    width = 1600 - margin.left - margin.right,
+    height = 500 - margin.top - margin.bottom;
+
+var x = d3.scale.ordinal()
+    .rangeRoundBands([0, width], .1);
+// var x = d3.time.scale()
+//     .range([0, width]);
+// var x = d3.scale.linear()
+//     .range([0, 500]);
+
+var y = d3.scale.linear()
+    .range([height, 0]);
+
+var xAxis = d3.svg.axis()
+    .scale(x)
+    .orient("bottom");
+
+var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left")
+    // .tickFormat(formatPercent);
+
+var tip = d3.tip()
+  .attr('class', 'd3-tip')
+  .offset([-10, 0])
+  .html(function(d) {
+    return "<strong>Magnitude:</strong> <span style='color:red'>" + d.mag + "&nbsp&nbsp</span><strong>date:</strong> <span style='color:red'>" + d.date + "</span>";
+  })
+
+//var svgchart = d3.select("body").append("svg")
+
+     svgchart.attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    // .attr("transform", "translate(0," + (h - padding) + ")")//设置据下边界的距离
+    .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+    // .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+svgchart.call(tip);
+
+// d3.tsv("data.tsv", type, function(error, data) {
+//d3.tsv("data.tsv", function(error, data) {
+   
+  x.domain(data.map(function(d) { return d.date; }));
+  // x.domain(d3.extent(data, function(d) { return d.date; }))
+  y.domain([0, 12]);
+  //y.domain([0, d3.max(data, function(d) { return d.mag; })]);
+
+  svgchart.append("g")
+      .attr("class", "x axis")
+      .attr("transform", "translate(0," + height + ")")
+      .call(xAxis);
+
+  svgchart.append("g")
+      .attr("class", "y axis")
+      .call(yAxis)
+      .append("text")
+      .attr("transform", "rotate(-90)")
+      .attr("y", 6)
+      .attr("dy", ".71em")
+      .style("text-anchor", "end")
+      .text("Magnitude");
+
+  svgchart.selectAll(".bar")
+      .data(data)
+    .enter().append("rect")
+      .attr("class", "bar")
+     // .attr("x", function(d) { return x(d.date.substring(0,4));})
+	 .attr("x", function(d) { return x(d.date);})
+       .attr("width", 13)
+      .attr("width", x.rangeBand())
+      .attr("y", function(d) { return y(d.mag); })
+      .attr("height", function(d) { return (height - y(d.mag)); })
+      // .attr("height", function(d) { return height - y(d.magnitude); })
+      .on('mouseover', tip.show)
+      .on('mouseout', tip.hide)
+
+//});
+}
+
+function type(d) {
+  d.mag = +d.mag;
+  return d;
+}
+
+
+</script>
+</body>
